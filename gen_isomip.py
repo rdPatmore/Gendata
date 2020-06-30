@@ -14,16 +14,16 @@ import BLS.Calc.coordinate_transforms as trans
 ## Outputs all required for regridding in MITgcm
 ##====================================================##
 
-case_name = 'ISOBL_141'
+case_name = 'ISOBL_144'
 
 # Set grid
 cartesian    = 1
 res_multiplier = 1.0 
 res          = 10.0/res_multiplier
 zRes         = 1
-ydim         = int(200*res_multiplier)
-xdim         = int(200*res_multiplier)
-zdim         = 104
+ydim         = int(100*res_multiplier)
+xdim         = int(100*res_multiplier)
+zdim         = 16
 latMax       = -1
 latMin       = -75
 z0           = 20
@@ -158,6 +158,9 @@ def ini_cat(time):
         ini_f[:,:,0] = ini_f[:,:,1]
         ini_f[:,:,-1] = ini_f[:,:,-2]
 
+        # flip vertical axis
+        ini_f = ini_f[::-1]
+
         # -- random kick -- #
         if rand:
             kick = 2e-4
@@ -169,21 +172,23 @@ def ini_cat(time):
         # save
         name  = case_name + '_' + fname + '.bin'
         state.writeBin(ini_f, name)
+        
+        return ini_f, name
 
-    make_ini_file('THETA_spatial_mean', 'ini_theta', ambiant_T, rand=False)
+    t, name = make_ini_file('THETA_spatial_mean', 'ini_theta', ambiant_T, rand=False)
     make_ini_file('SALT_spatial_mean', 'ini_salt', ambiant_S, rand=False)
     make_ini_file('UVEL_spatial_mean', 'ini_uvel', 0, rand=True)
     make_ini_file('VVEL_spatial_mean', 'ini_vvel', 0, rand=True)
 
-    #y = state.readBin(name,int(xdim),int(ydim),int(zdim))
-    #fig = plt.figure(3)
-    #p = plt.pcolormesh(cat_3d.X, cat_3d.new_Z, y[:,0,:])
-    #plt.axis('equal')
-    #plt.colorbar(p)
-    #plt.title('temp')
-    #plt.show()
+    y = state.readBin(name,int(xdim),int(ydim),int(zdim))
+    fig = plt.figure(3)
+    p = plt.pcolormesh(cat_3d.X, cat_3d.new_Z, y[:,0,:])
+    plt.axis('equal')
+    plt.colorbar(p)
+    plt.title('temp')
+    plt.show()
 
-ini_cat(30)
+#ini_cat(30)
     
 
 # MITgcm binary file is saved in (x,y) format
@@ -287,8 +292,8 @@ def make_ini_shice_topo():
 
     # ---------------------------------------- #
     # shelf-ice topo Stepping for when hFacMin!=1
-    ice_min = -16
-    ice_max = -8
+    ice_min = -32
+    ice_max = -16
     depths = np.linspace(ice_min,ice_max,xdim-2)
     print ('DEPTHS DIFF', depths)
     print ('shite shape DIFF', shice_topo.shape)
@@ -376,7 +381,7 @@ def make_ini_vels(state):
     kick = 1e-3
     uVels = kick * (np.random.rand(*state.shape) - 0.5)
     vVels = kick * (np.random.rand(*state.shape) - 0.5)
-    wVels = kick * (np.random.rand(*state.shape) - 0.5)
+    #wVels = kick * (np.random.rand(*state.shape) - 0.5)
 
     expon = 0
     if expon:
@@ -389,7 +394,7 @@ def make_ini_vels(state):
 
     uKick = uVels * exp 
     vKick = vVels * exp 
-    wKick = wVels * exp 
+    #wKick = wVels * exp 
     # -- random kick -- #
 
 
@@ -398,10 +403,10 @@ def make_ini_vels(state):
     #vels[2,0,-3] = 1
     state.writeBin(uKick,uName)
     state.writeBin(vKick,vName)
-    state.writeBin(wKick,wName)
-    plot_2d(state, uNname, xdim, ydim, zdim, title='vels',fnum=1)
+    #state.writeBin(wKick,wName)
+    plot_2d(state, uName, xdim, ydim, zdim, title='vels',fnum=1)
 
-def make_bathy(xdim, ydim, ini_params):
+def make_bathy(xdim, ydim, ini_params, hFacMin=None):
     name = case_name + '_bathy.bin'
     bathy = gen.Bathymetry(ini_params)
     b = bathy.get_bathy()#[::-1]
@@ -421,8 +426,8 @@ def make_bathy(xdim, ydim, ini_params):
     else:
         # Bathy Stepping for when hFacMin!=1
         #step = 5
-        bathy_min = -112
-        bathy_max = -104
+        bathy_min = -144
+        bathy_max = -128
         depths = np.linspace(bathy_min,bathy_max,xdim-2)
         print ('DEPTHS DIFF', depths)
         for i, pos in enumerate(depths):
@@ -507,7 +512,7 @@ def make_rbcs():
     plt.colorbar(p)
     plt.title('mask')
 
-make_bathy()
+make_bathy(xdim, ydim, ini_params)
 make_ini_shice_topo()
-make_ini_shice_p()
-make_ini_vels()
+make_ini_shice_rho()
+make_ini_vels(state)
