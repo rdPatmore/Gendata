@@ -14,7 +14,7 @@ import BLS.Calc.coordinate_transforms as trans
 ## Outputs all required for regridding in MITgcm
 ##====================================================##
 
-case_name = 'ISOBL_144'
+case_name = 'ISOBL_149'
 
 # Set grid
 cartesian    = 1
@@ -23,7 +23,7 @@ res          = 10.0/res_multiplier
 zRes         = 1
 ydim         = int(100*res_multiplier)
 xdim         = int(100*res_multiplier)
-zdim         = 16
+zdim         = 53
 latMax       = -1
 latMin       = -75
 z0           = 20
@@ -188,7 +188,7 @@ def ini_cat(time):
     plt.title('temp')
     plt.show()
 
-#ini_cat(30)
+#ini_cat(200)
     
 
 # MITgcm binary file is saved in (x,y) format
@@ -292,8 +292,8 @@ def make_ini_shice_topo():
 
     # ---------------------------------------- #
     # shelf-ice topo Stepping for when hFacMin!=1
-    ice_min = -32
-    ice_max = -16
+    ice_min = -8
+    ice_max = -4
     depths = np.linspace(ice_min,ice_max,xdim-2)
     print ('DEPTHS DIFF', depths)
     print ('shite shape DIFF', shice_topo.shape)
@@ -426,8 +426,8 @@ def make_bathy(xdim, ydim, ini_params, hFacMin=None):
     else:
         # Bathy Stepping for when hFacMin!=1
         #step = 5
-        bathy_min = -144
-        bathy_max = -128
+        bathy_min = -208
+        bathy_max = -204
         depths = np.linspace(bathy_min,bathy_max,xdim-2)
         print ('DEPTHS DIFF', depths)
         for i, pos in enumerate(depths):
@@ -438,6 +438,7 @@ def make_bathy(xdim, ydim, ini_params, hFacMin=None):
 
     bathy.writeBin(b,name)
     plot_1d(bathy, name, xdim, ydim, title='bathy', fnum=0)
+    return b
 
 def plot_1d(data, data_dir, xdim, ydim, title='',fnum=0):
     y = data.readBin(data_dir,int(xdim),int(ydim))
@@ -482,37 +483,35 @@ def make_wind():
     #plt.plot(wind[0,:])
     plt.show()
 
-def make_rbcs():
+def make_rbcs(b):
     mask_name = case_name + '_rbcs_mask.bin'
     t_name = case_name + '_rbcs_temp.bin'
     s_name = case_name + '_rbcs_salt.bin'
+    zres=4; xlen=100
     mesh = np.mgrid[0:int(zdim),0:int(ydim),0:int(xdim)][0] 
-    mesh = mesh + 1 
+    mesh = (mesh + 1) * zres
     
-    print (bathy.writePath)
     rbcs_mask = np.where(mesh >= -b, 1.0, 0.0) 
     mask_args = np.argmax(rbcs_mask, axis=0)
-    d = np.arange(100)
-    fig = plt.figure(1)
-    for i, frac in enumerate(np.logspace(-2,0,10,endpoint=False)[::-1]):
-        print (frac)
+    d = np.arange(xlen)
+    
+    for i, frac in enumerate(np.logspace(-2,0,5,endpoint=True)[::-1]):
         rbcs_mask[mask_args - i,:, d] = frac
-    rbcs_t = np.full_like(rbcs_mask, -1.96226)
-    rbcs_s = np.full_like(rbcs_mask, 34.5714)
-    print ('shap', rbcs_mask.max())
-    print ('shap', rbcs_mask.min())
+    rbcs_t = np.full_like(rbcs_mask, -0.12195)
+    rbcs_s = np.full_like(rbcs_mask, 34.5)
 
-    bathy.writeBin(rbcs_mask, mask_name)
-    bathy.writeBin(rbcs_t, t_name)
-    bathy.writeBin(rbcs_s, s_name)
-    y = bathy.readBin(mask_name, int(xdim),int(ydim),int(zdim))
+    state.writeBin(rbcs_mask, mask_name)
+    state.writeBin(rbcs_t, t_name)
+    state.writeBin(rbcs_s, s_name)
+    y = state.readBin(mask_name, int(xdim),int(ydim),int(zdim))
     fig = plt.figure(1)
     p = plt.pcolormesh(y[:,0,:])
     plt.axis('equal')
     plt.colorbar(p)
     plt.title('mask')
 
-make_bathy(xdim, ydim, ini_params)
+bathy = make_bathy(xdim, ydim, ini_params)
 make_ini_shice_topo()
 make_ini_shice_rho()
 make_ini_vels(state)
+make_rbcs(bathy)
