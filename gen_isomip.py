@@ -14,7 +14,7 @@ import BLS.Calc.coordinate_transforms as trans
 ## Outputs all required for regridding in MITgcm
 ##====================================================##
 
-case_name = 'ISOBL_149'
+case_name = 'ISOBL_151'
 
 # Set grid
 cartesian    = 1
@@ -23,7 +23,7 @@ res          = 10.0/res_multiplier
 zRes         = 1
 ydim         = int(100*res_multiplier)
 xdim         = int(100*res_multiplier)
-zdim         = 53
+zdim         = 240
 latMax       = -1
 latMin       = -75
 z0           = 20
@@ -292,8 +292,8 @@ def make_ini_shice_topo():
 
     # ---------------------------------------- #
     # shelf-ice topo Stepping for when hFacMin!=1
-    ice_min = -8
-    ice_max = -4
+    ice_min = -32
+    ice_max = -16
     depths = np.linspace(ice_min,ice_max,xdim-2)
     print ('DEPTHS DIFF', depths)
     print ('shite shape DIFF', shice_topo.shape)
@@ -426,8 +426,8 @@ def make_bathy(xdim, ydim, ini_params, hFacMin=None):
     else:
         # Bathy Stepping for when hFacMin!=1
         #step = 5
-        bathy_min = -208
-        bathy_max = -204
+        bathy_min = -224
+        bathy_max = -208
         depths = np.linspace(bathy_min,bathy_max,xdim-2)
         print ('DEPTHS DIFF', depths)
         for i, pos in enumerate(depths):
@@ -495,7 +495,9 @@ def make_rbcs(b):
     mask_args = np.argmax(rbcs_mask, axis=0)
     d = np.arange(xlen)
     
-    for i, frac in enumerate(np.logspace(-2,0,5,endpoint=True)[::-1]):
+    time_scale = [np.logspace(-2,0,16,endpoint=True)[::-1][7]]
+    print ('TIME', time_scale)
+    for i, frac in enumerate(time_scale):
         rbcs_mask[mask_args - i,:, d] = frac
     rbcs_t = np.full_like(rbcs_mask, -0.12195)
     rbcs_s = np.full_like(rbcs_mask, 34.5)
