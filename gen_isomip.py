@@ -14,19 +14,14 @@ import BLS.Calc.coordinate_transforms as trans
 ## Outputs all required for regridding in MITgcm
 ##====================================================##
 
-case_name = 'ISOBL_151'
+case_name = 'ISOBL_152'
 
 # Set grid
-cartesian    = 1
-res_multiplier = 1.0 
-res          = 10.0/res_multiplier
-zRes         = 1
-ydim         = int(100*res_multiplier)
-xdim         = int(100*res_multiplier)
-zdim         = 240
-latMax       = -1
-latMin       = -75
-z0           = 20
+zres         = 4
+hres         = 4
+ydim         = 200
+xdim         = 200
+zdim         = 203
 
 # Set bathymetry
 depMax       = 9
@@ -292,8 +287,8 @@ def make_ini_shice_topo():
 
     # ---------------------------------------- #
     # shelf-ice topo Stepping for when hFacMin!=1
-    ice_min = -32
-    ice_max = -16
+    ice_min = -(zres*2)
+    ice_max = -(zres*1)
     depths = np.linspace(ice_min,ice_max,xdim-2)
     print ('DEPTHS DIFF', depths)
     print ('shite shape DIFF', shice_topo.shape)
@@ -426,8 +421,8 @@ def make_bathy(xdim, ydim, ini_params, hFacMin=None):
     else:
         # Bathy Stepping for when hFacMin!=1
         #step = 5
-        bathy_min = -224
-        bathy_max = -208
+        bathy_min = -(zdim-1)*zres
+        bathy_max = -(zdim-2)*zres
         depths = np.linspace(bathy_min,bathy_max,xdim-2)
         print ('DEPTHS DIFF', depths)
         for i, pos in enumerate(depths):
@@ -487,15 +482,14 @@ def make_rbcs(b):
     mask_name = case_name + '_rbcs_mask.bin'
     t_name = case_name + '_rbcs_temp.bin'
     s_name = case_name + '_rbcs_salt.bin'
-    zres=4; xlen=100
     mesh = np.mgrid[0:int(zdim),0:int(ydim),0:int(xdim)][0] 
     mesh = (mesh + 1) * zres
     
     rbcs_mask = np.where(mesh >= -b, 1.0, 0.0) 
     mask_args = np.argmax(rbcs_mask, axis=0)
-    d = np.arange(xlen)
+    d = np.arange(xdim)
     
-    time_scale = [np.logspace(-2,0,16,endpoint=True)[::-1][7]]
+    time_scale = np.logspace(-2,0,32,endpoint=True)[::-1][::zres]
     print ('TIME', time_scale)
     for i, frac in enumerate(time_scale):
         rbcs_mask[mask_args - i,:, d] = frac
