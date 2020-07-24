@@ -14,16 +14,20 @@ import BLS.Calc.coordinate_transforms as trans
 ## Outputs all required for regridding in MITgcm
 ##====================================================##
 
-case_name = 'ISOBL_152'
+case_name = 'ISOBL_155'
 
 # Set grid
-zres         = 4
-hres         = 4
-ydim         = 200
-xdim         = 200
-zdim         = 203
+zres         = 1
+hres         = 1
+ydim         = 400
+xdim         = 400
+Lz           = 100
+zdim         = int((Lz + 3) / zres)
 
-# Set bathymetry
+# Set boundary shift
+topo_shift_ratio = 1. / 100.
+topo_shift = int(topo_shift_ratio * ydim / zres)
+
 depMax       = 9
 wall_west    = 0
 wall_east    = xdim
@@ -196,7 +200,6 @@ def make_ini_temp():
     
     hFacC = state.readBin('ISOBL_024_hFacC.bin',int(xdim),int(ydim), int(zdim))
     t = np.full(state.gridx.shape, -0.1451) # uniform pforce
-    print (t.shape)
     ice_end = np.argmax(np.where(hFacC < 1 , t, 0), axis=0)
     bathy_start = np.argmax(np.where(hFacC[::-1] < 1 , t, 0), axis=0)
     for i in range(t.shape[2]):
@@ -287,17 +290,14 @@ def make_ini_shice_topo():
 
     # ---------------------------------------- #
     # shelf-ice topo Stepping for when hFacMin!=1
-    ice_min = -(zres*2)
-    ice_max = -(zres*1)
+    ice_min = -zres * (1 + topo_shift)
+    ice_max = -zres *  1
+    print ('ICE_MIN', ice_min)
+    print ('ICE_MAX', ice_max)
     depths = np.linspace(ice_min,ice_max,xdim-2)
-    print ('DEPTHS DIFF', depths)
-    print ('shite shape DIFF', shice_topo.shape)
     shice_topo = shice_topo.astype('float64')
-    print ('TYPE', shice_topo.dtype)
     for i, depth in enumerate(depths):
         shice_topo[:,i+1] = depth 
-        print (shice_topo)
-        print (depth)
     shice_topo[:,0] = ice_min
     shice_topo[:,-1] = ice_max
     # ---------------------------------------- #
@@ -307,7 +307,6 @@ def make_ini_shice_topo():
     #shice_topo[:,pos:pos + 1] = -2 
     #shice_topo[:,:25] = -3 
     #shice_topo[:,25:75] = -2 
-    print ('shice topo', shice_topo)
     state.writeBin(shice_topo, ShiceTopo)
     y = state.readBin(ShiceTopo,int(xdim),int(ydim))
     fig = plt.figure(5)
@@ -383,7 +382,6 @@ def make_ini_vels(state):
         mesh = (np.mgrid[0:int(zdim),0:int(ydim),0:int(xdim)][0] /
                 int(zdim)) - 1 
         exp = np.exp(mesh)[::-1]
-        print ('EXP', exp)
     else:
         exp = 1
 
@@ -413,18 +411,17 @@ def make_bathy(xdim, ydim, ini_params, hFacMin=None):
         intervals = np.arange(int(step/2),100,step)
         b[:,intervals[0]:] = -99  
         for i, pos in enumerate(intervals):
-            print ('pos', pos)
-            print ('pos', pos-step)
             b[:,pos:pos+step] = -98 + i
         b[:,intervals[-1]:] = -99 + len(intervals) 
 
     else:
         # Bathy Stepping for when hFacMin!=1
         #step = 5
-        bathy_min = -(zdim-1)*zres
-        bathy_max = -(zdim-2)*zres
+        bathy_min = -(zdim   -1)*zres
+        bathy_max = -(zdim - (1 + topo_shift))*zres
+        print ('bathy min', bathy_min)
+        print ('bathy max', bathy_max)
         depths = np.linspace(bathy_min,bathy_max,xdim-2)
-        print ('DEPTHS DIFF', depths)
         for i, pos in enumerate(depths):
             b[:,i+1] = depths[i] 
         b[:,0] = bathy_min 
@@ -490,6 +487,7 @@ def make_rbcs(b):
     d = np.arange(xdim)
     
     time_scale = np.logspace(-2,0,32,endpoint=True)[::-1][::zres]
+    #time_scale = [np.logspace(-2,0,32,endpoint=True)[::-1][15]]
     print ('TIME', time_scale)
     for i, frac in enumerate(time_scale):
         rbcs_mask[mask_args - i,:, d] = frac
