@@ -14,19 +14,34 @@ import BLS.Calc.coordinate_transforms as trans
 ## Outputs all required for regridding in MITgcm
 ##====================================================##
 
-case_name = 'ISOBL_155'
+case_name = 'ISOBLR2_001'
 
 # Set grid
-zres         = 1
-hres         = 1
-ydim         = 400
-xdim         = 400
-Lz           = 100
-zdim         = int((Lz + 3) / zres)
+zres  = 1.0 
+hres  = 1.0
+Lx    = 100 # length in metres
+Ly    = 100 
+Lz    = 100
+ydim  = int(Ly / hres) # number of y cells
+xdim  = int(Lx / hres) # number of x cells
 
 # Set boundary shift
 topo_shift_ratio = 1. / 100.
-topo_shift = int(topo_shift_ratio * ydim / zres)
+topo_shift = int(topo_shift_ratio * Ly / zres)
+ 
+# set number of z grid cells
+zdim = int((Lz / zres) + 2 + topo_shift)
+print (' ')
+print (' ')
+print (' ')
+print (' ')
+print (' ')
+print ('ZDIM', zdim)
+print (' ')
+print (' ')
+print (' ')
+print (' ')
+print (' ')
 
 depMax       = 9
 wall_west    = 0
@@ -89,9 +104,17 @@ ini_params = { 'xdim'  : xdim,
 
 state = gen.State(ini_params)
 
+def interp_hourly_time(ds):
+    import pandas as pd
+    date = pd.to_datetime('1971-01-01 00:00:00')
+    time_range = date + pd.to_timedelta(np.arange(31), 'H')
+    ds = ds.interp({'TIME': time_range}, kwargs={'fill_value': np.nan})
+    return ds
+
 def get_cat_profile(time, quantity):
     cat = load_cat()
-    cat_prof = cat.isel(TIME=time)
+    cat = interp_hourly_time(cat)
+    cat_prof = cat.isel(TIME=-1)
     cat_quantity = cat_prof[quantity]
     return cat_quantity
 
@@ -115,13 +138,13 @@ def ini_cat(time):
     cat = xr.merge([T,S,U,V])
 
     # interp to 1 m grid
-    cat = cat.interp({'new_Z': np.linspace(-101.5, 1.5, 104)},
-                 kwargs={'fill_value':np.nan})
+    cat = cat.interp({'new_Z': np.linspace(-101.5, 1.5, zdim)},
+                 kwargs={'fill_value': np.nan})
     array_shape = (state.ydim, state.xdim)
     dummy = xr.DataArray(np.full(array_shape, freeze_T), 
                          dims=['Y', 'X'],
-                         coords={'X':np.arange(200),
-                                 'Y':np.arange(200)})
+                         coords={'X':np.arange(xdim),
+                                 'Y':np.arange(ydim)})
     cat_3d = cat.broadcast_like(dummy, exclude='new_Z')
     cat_3d['X_dash'], cat_3d['Y_dash'], cat_3d['Z_dash'] = trans.rotate_coords(                                                           cat_3d.X, 
                                                           cat_3d.Y, 
@@ -373,20 +396,22 @@ def make_ini_vels(state):
 
     # -- random kick -- #
     kick = 1e-3
-    uVels = kick * (np.random.rand(*state.shape) - 0.5)
-    vVels = kick * (np.random.rand(*state.shape) - 0.5)
+    uVels = kick * (np.random.rand(*state.shape) - 0.5) * 2
+    vVels = kick * (np.random.rand(*state.shape) - 0.5) * 2
     #wVels = kick * (np.random.rand(*state.shape) - 0.5)
 
-    expon = 0
+    expon = 1
     if expon:
         mesh = (np.mgrid[0:int(zdim),0:int(ydim),0:int(xdim)][0] /
-                int(zdim)) - 1 
-        exp = np.exp(mesh)[::-1]
+                int(zdim)) * np.pi
+        exp = np.sin(mesh) * np.exp(mesh)[::-1]
+        exp = exp / exp.max()
     else:
         exp = 1
 
     uKick = uVels * exp 
     vKick = vVels * exp 
+
     #wKick = wVels * exp 
     # -- random kick -- #
 
@@ -475,28 +500,29 @@ def make_wind():
     #plt.plot(wind[0,:])
     plt.show()
 
-def make_rbcs(b):
+def make_rbcs(b, temp=-0.12195, salt=34.5, modelSalt=True):
     mask_name = case_name + '_rbcs_mask.bin'
     t_name = case_name + '_rbcs_temp.bin'
-    s_name = case_name + '_rbcs_salt.bin'
+    if modelSalt:
+         s_name = case_name + '_rbcs_salt.bin'
     mesh = np.mgrid[0:int(zdim),0:int(ydim),0:int(xdim)][0] 
     mesh = (mesh + 1) * zres
     
     rbcs_mask = np.where(mesh >= -b, 1.0, 0.0) 
     mask_args = np.argmax(rbcs_mask, axis=0)
     d = np.arange(xdim)
-    
-    time_scale = np.logspace(-2,0,32,endpoint=True)[::-1][::zres]
-    #time_scale = [np.logspace(-2,0,32,endpoint=True)[::-1][15]]
+   
+    time_scale = np.logspace(-2,0,int(32/zres),endpoint=True)[::-1]
     print ('TIME', time_scale)
     for i, frac in enumerate(time_scale):
         rbcs_mask[mask_args - i,:, d] = frac
-    rbcs_t = np.full_like(rbcs_mask, -0.12195)
-    rbcs_s = np.full_like(rbcs_mask, 34.5)
+    rbcs_t = np.full_like(rbcs_mask, temp)
+    if modelSalt:
+        rbcs_s = np.full_like(rbcs_mask, 34.5)
+        state.writeBin(rbcs_s, s_name)
 
     state.writeBin(rbcs_mask, mask_name)
     state.writeBin(rbcs_t, t_name)
-    state.writeBin(rbcs_s, s_name)
     y = state.readBin(mask_name, int(xdim),int(ydim),int(zdim))
     fig = plt.figure(1)
     p = plt.pcolormesh(y[:,0,:])
@@ -508,4 +534,6 @@ bathy = make_bathy(xdim, ydim, ini_params)
 make_ini_shice_topo()
 make_ini_shice_rho()
 make_ini_vels(state)
-make_rbcs(bathy)
+make_rbcs(bathy, temp=2, modelSalt=False)
+#ini_cat(200)
+#plt.show()
